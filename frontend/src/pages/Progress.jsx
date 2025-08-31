@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, BarChart3, Edit, Trash2, Calendar, X, Save, Loader2, TrendingUp, Clock } from 'lucide-react';
+import { Plus, BarChart3, Edit, Trash2, Calendar, X, Save, Loader2, TrendingUp, Clock, Target, Award, Activity } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { progressAPI, habitsAPI } from '../services/api';
 import toast from 'react-hot-toast';
@@ -17,7 +17,12 @@ const Progress = () => {
     completed: 0,
     completionRate: 0,
     averageValue: 0,
-    currentStreak: 0
+    currentStreak: 0,
+    bestHabit: '',
+    worstHabit: '',
+    totalTimeSpent: 0,
+    averageMood: 'good',
+    consistencyScore: 0
   });
 
   const {
@@ -64,12 +69,46 @@ const Progress = () => {
         progressAPI.getSummary()
       ]);
       
-      setProgressEntries(progressResponse.data);
-      setHabits(habitsResponse.data);
-      setStats(statsResponse.data);
+      console.log('Progress API response:', progressResponse);
+      console.log('Habits API response:', habitsResponse);
+      console.log('Stats API response:', statsResponse);
+      
+      // Handle different response structures
+      setProgressEntries(Array.isArray(progressResponse.data) ? progressResponse.data : 
+                        Array.isArray(progressResponse.data.progress) ? progressResponse.data.progress : []);
+      
+      setHabits(Array.isArray(habitsResponse.data) ? habitsResponse.data : 
+                Array.isArray(habitsResponse.data.habits) ? habitsResponse.data.habits : []);
+      
+      const progressData = Array.isArray(progressResponse.data) ? progressResponse.data : 
+                          Array.isArray(progressResponse.data.progress) ? progressResponse.data.progress : [];
+      const habitsData = Array.isArray(habitsResponse.data) ? habitsResponse.data : 
+                        Array.isArray(habitsResponse.data.habits) ? habitsResponse.data.habits : [];
+      
+      setProgressEntries(progressData);
+      setHabits(habitsData);
+      
+      // Calculate analytics from the data
+      const calculatedStats = calculateAnalytics(progressData, habitsData);
+      setStats(calculatedStats);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load progress data');
+      // Set empty arrays on error
+      setProgressEntries([]);
+      setHabits([]);
+      setStats({
+        totalEntries: 0,
+        completed: 0,
+        completionRate: 0,
+        averageValue: 0,
+        currentStreak: 0,
+        bestHabit: '',
+        worstHabit: '',
+        totalTimeSpent: 0,
+        averageMood: 'good',
+        consistencyScore: 0
+      });
     } finally {
       setLoading(false);
     }
@@ -195,6 +234,79 @@ const Progress = () => {
     });
   };
 
+  const calculateAnalytics = (entries, habitsList) => {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return {
+        totalEntries: 0,
+        completed: 0,
+        completionRate: 0,
+        averageValue: 0,
+        currentStreak: 0,
+        bestHabit: '',
+        worstHabit: '',
+        totalTimeSpent: 0,
+        averageMood: 'good',
+        consistencyScore: 0
+      };
+    }
+
+    const completed = entries.filter(entry => entry.completed).length;
+    const totalEntries = entries.length;
+    const completionRate = totalEntries > 0 ? Math.round((completed / totalEntries) * 100) : 0;
+    const averageValue = entries.reduce((sum, entry) => sum + (entry.value || 0), 0) / totalEntries;
+    const totalTimeSpent = entries.reduce((sum, entry) => sum + (entry.timeSpent || 0), 0);
+
+    // Calculate habit performance
+    const habitStats = {};
+    entries.forEach(entry => {
+      const habitName = getHabitName(entry.habitId);
+      if (!habitStats[habitName]) {
+        habitStats[habitName] = { completed: 0, total: 0, value: 0 };
+      }
+      habitStats[habitName].total++;
+      if (entry.completed) habitStats[habitName].completed++;
+      habitStats[habitName].value += entry.value || 0;
+    });
+
+    const bestHabit = Object.keys(habitStats).reduce((best, habit) => {
+      const rate = habitStats[habit].completed / habitStats[habit].total;
+      const bestRate = habitStats[best] ? habitStats[best].completed / habitStats[best].total : 0;
+      return rate > bestRate ? habit : best;
+    }, '');
+
+    const worstHabit = Object.keys(habitStats).reduce((worst, habit) => {
+      const rate = habitStats[habit].completed / habitStats[habit].total;
+      const worstRate = habitStats[worst] ? habitStats[worst].completed / habitStats[worst].total : 1;
+      return rate < worstRate ? habit : worst;
+    }, '');
+
+    // Calculate average mood
+    const moodValues = { excellent: 4, good: 3, okay: 2, poor: 1 };
+    const moodEntries = entries.filter(entry => entry.mood);
+    const averageMoodValue = moodEntries.length > 0 
+      ? moodEntries.reduce((sum, entry) => sum + (moodValues[entry.mood] || 0), 0) / moodEntries.length 
+      : 3;
+    
+    const averageMood = Object.keys(moodValues).find(mood => moodValues[mood] === Math.round(averageMoodValue)) || 'good';
+
+    // Calculate consistency score (based on daily completion)
+    const dates = [...new Set(entries.map(entry => entry.date?.split('T')[0]))];
+    const consistencyScore = dates.length > 0 ? Math.round((completed / dates.length) * 100) : 0;
+
+    return {
+      totalEntries,
+      completed,
+      completionRate,
+      averageValue: Math.round(averageValue * 10) / 10,
+      currentStreak: 0, // This would need more complex calculation
+      bestHabit,
+      worstHabit,
+      totalTimeSpent,
+      averageMood,
+      consistencyScore
+    };
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -297,6 +409,102 @@ const Progress = () => {
         </div>
       </div>
 
+      {/* Enhanced Analytics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-4">
+          <div className="flex items-center">
+            <Award className="h-8 w-8 text-yellow-600 mr-3" />
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Best Habit</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {stats.bestHabit || 'None yet'}
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card p-4">
+          <div className="flex items-center">
+            <Target className="h-8 w-8 text-red-600 mr-3" />
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Needs Improvement</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {stats.worstHabit || 'None yet'}
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card p-4">
+          <div className="flex items-center">
+            <Clock className="h-8 w-8 text-indigo-600 mr-3" />
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Total Time</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {stats.totalTimeSpent} min
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card p-4">
+          <div className="flex items-center">
+            <Activity className="h-8 w-8 text-green-600 mr-3" />
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Consistency</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {stats.consistencyScore}%
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Trend */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Progress Trend - {selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}
+        </h3>
+        <div className="space-y-4">
+          {Array.isArray(progressEntries) && progressEntries.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Completion Rate</h4>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                  <div 
+                    className="bg-green-500 h-4 rounded-full transition-all duration-300"
+                    style={{ width: `${stats.completionRate}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {stats.completed} of {stats.totalEntries} tasks completed
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Consistency Score</h4>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                  <div 
+                    className="bg-blue-500 h-4 rounded-full transition-all duration-300"
+                    style={{ width: `${stats.consistencyScore}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {stats.consistencyScore}% consistency achieved
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 dark:text-gray-400">
+                No progress data available for {selectedPeriod}. Start logging your progress to see trends!
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Progress Entries */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -322,7 +530,7 @@ const Progress = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {progressEntries.map((entry) => (
+            {Array.isArray(progressEntries) && progressEntries.map((entry) => (
               <div key={entry._id} className="card p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -367,6 +575,48 @@ const Progress = () => {
                           {moods.find(m => m.value === entry.mood)?.label || entry.mood}
                         </p>
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+                      {entry.timeSpent && (
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-300">Time Spent</p>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {entry.timeSpent} min
+                          </p>
+                        </div>
+                      )}
+                      
+                      {entry.difficulty && (
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-300">Difficulty</p>
+                          <p className={`font-medium ${getDifficultyColor(entry.difficulty)}`}>
+                            {difficulties.find(d => d.value === entry.difficulty)?.label || entry.difficulty}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {entry.location && (
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-300">Location</p>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {entry.location}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {entry.tags && entry.tags.length > 0 && (
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-300">Tags</p>
+                          <div className="flex flex-wrap gap-1">
+                            {entry.tags.map((tag, index) => (
+                              <span key={index} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     {entry.notes && (
@@ -426,7 +676,7 @@ const Progress = () => {
                   className="input w-full"
                 >
                   <option value="">Select a habit</option>
-                  {habits.map((habit) => (
+                  {Array.isArray(habits) && habits.map((habit) => (
                     <option key={habit._id} value={habit._id}>
                       {habit.name} ({habit.category})
                     </option>
@@ -534,6 +784,44 @@ const Progress = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Time Spent (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    {...register('timeSpent')}
+                    className="input w-full"
+                    placeholder="e.g., 30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    {...register('location')}
+                    className="input w-full"
+                    placeholder="e.g., Home, Gym, Office"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tags
+                </label>
+                <input
+                  type="text"
+                  {...register('tags')}
+                  className="input w-full"
+                  placeholder="e.g., morning, workout, study (comma separated)"
+                />
               </div>
 
               <div>
