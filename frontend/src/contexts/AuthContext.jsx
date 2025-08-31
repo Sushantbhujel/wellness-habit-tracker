@@ -48,7 +48,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      console.log('Attempting login for:', email);
       const response = await authAPI.login({ email, password });
+      console.log('Login response:', response);
       const { token: newToken, user: userData } = response.data;
       
       localStorage.setItem('token', newToken);
@@ -58,7 +60,8 @@ export const AuthProvider = ({ children }) => {
       toast.success('Login successful!');
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('Login error:', error);
+      const message = error.response?.data?.message || error.message || 'Login failed';
       toast.error(message);
       return { success: false, error: message };
     }
@@ -66,7 +69,9 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
+      console.log('Attempting registration for:', userData.email);
       const response = await authAPI.register(userData);
+      console.log('Registration response:', response);
       const { token: newToken, user: newUser } = response.data;
       
       localStorage.setItem('token', newToken);
@@ -76,7 +81,8 @@ export const AuthProvider = ({ children }) => {
       toast.success('Registration successful!');
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Registration failed';
+      console.error('Registration error:', error);
+      const message = error.response?.data?.message || error.message || 'Registration failed';
       toast.error(message);
       return { success: false, error: message };
     }

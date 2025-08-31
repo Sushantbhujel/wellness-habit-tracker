@@ -20,6 +20,7 @@ router.post('/register', [
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('role').optional().isIn(['student', 'teacher', 'mentor']).withMessage('Invalid role')
 ], async (req, res) => {
+  console.log('Registration attempt:', { email: req.body.email, name: req.body.name });
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -65,6 +66,7 @@ router.post('/login', [
   body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
   body('password').exists().withMessage('Password is required')
 ], async (req, res) => {
+  console.log('Login attempt:', { email: req.body.email });
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

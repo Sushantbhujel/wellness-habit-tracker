@@ -13,18 +13,30 @@ const progressRoutes = require('./routes/progress');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// CORS configuration - must come before other middleware
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
-// Rate limiting
+// Security middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Rate limiting - more lenient for development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 1000, // limit each IP to 1000 requests per windowMs (increased for development)
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -42,7 +54,14 @@ app.use('/api/progress', progressRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {
+  console.log('Health check requested');
   res.json({ status: 'OK', message: 'Wellness Tracker API is running' });
+});
+
+// Test route for debugging
+app.get('/api/test', (req, res) => {
+  console.log('Test route accessed');
+  res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware
