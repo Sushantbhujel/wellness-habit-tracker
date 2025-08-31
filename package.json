@@ -1,0 +1,20 @@
+{
+  "name": "wellness-habit-tracker",
+  "version": "1.0.0",
+  "description": "A comprehensive wellness and habit tracking application for students",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm run dev",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start"
+  },
+  "keywords": ["wellness", "habit-tracker", "react", "nodejs", "mongodb"],
+  "author": "Sushank Timilsena, Sushant Bhujel",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
